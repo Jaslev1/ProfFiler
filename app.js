@@ -16,7 +16,11 @@ function go(id) {
 }
 
 window._QI = false;
-var QP = 'intro', QC = 0, QA = {}, QR = '';
+var QP = 'intro';   // intro | docs | quiz | loading | report
+var QC = 0;
+var QA = {};
+var QR = '';
+var DOCS = [];      // uploaded doc names (fix 3)
 
 var QS = [
   {id:1,t:'r',q:'When attending a social event, you prefer to:',
@@ -39,24 +43,87 @@ function renderQuiz() {
   var root = document.getElementById('qroot');
   if (!root) return;
   if (QP === 'intro')        root.innerHTML = tmplIntro();
+  else if (QP === 'docs')    root.innerHTML = tmplDocs();
   else if (QP === 'quiz')    root.innerHTML = tmplQ();
   else if (QP === 'loading') root.innerHTML = tmplLoad();
   else                       root.innerHTML = tmplReport();
 }
 
+// ── Intro ────────────────────────────────────────────────────────────────
 function tmplIntro() {
   var h = '<div class="qic">';
   h += '<img src="'+M+'" height="76" alt="Prof. Filer" style="display:inline-block">';
   h += '<h2>Personality Assessment</h2>';
-  h += '<p style="font-size:14px;color:#7C7E7D;line-height:1.65;margin-bottom:4px">10 questions. Under 5 minutes.<br>A surprisingly accurate read on how you think, feel, and move through the world.</p>';
+  h += '<p style="font-size:14px;color:#7C7E7D;line-height:1.65;margin-bottom:4px">10 questions &amp; 3 documents. Under 5 minutes.<br>A surprisingly accurate read on how you think, feel, and move through the world.</p>';
   h += '<div class="qdge">&#128274; Your answers are processed privately and never stored on our servers.</div>';
-  h += '<button class="qbtn" onclick="startQuiz()" style="width:100%;font-size:15px;padding:14px;margin-top:4px">Begin Assessment &#8594;</button>';
+  h += '<button class="qbtn" onclick="QP=\'docs\';renderQuiz()" style="width:100%;font-size:15px;padding:14px;margin-top:4px">Begin Assessment &#8594;</button>';
   h += '</div>';
   return h;
 }
 
-function startQuiz() { QP='quiz'; QC=0; renderQuiz(); }
+// ── Fix 3: Document upload step ──────────────────────────────────────────
+function tmplDocs() {
+  var uploaded = DOCS.length;
+  var allDone = (uploaded >= 3);
 
+  var docList = '';
+  for (var i = 0; i < DOCS.length; i++) {
+    docList += '<div class="doc-item">';
+    docList += '<div class="doc-icon">&#128196;</div>';
+    docList += '<div class="doc-name">'+escHtml(DOCS[i])+'</div>';
+    docList += '<button class="doc-remove" onclick="removeDoc('+i+')">&#215;</button>';
+    docList += '</div>';
+  }
+
+  var dropArea = '';
+  if (!allDone) {
+    dropArea = '<div class="doc-drop" onclick="document.getElementById(\'docInput\').click()">';
+    dropArea += '<div style="font-size:32px;margin-bottom:8px">&#8679;</div>';
+    dropArea += allDone ? '<strong>All documents uploaded!</strong>' : '<strong>'+(uploaded > 0 ? uploaded+' of 3 uploaded — add '+(3-uploaded)+' more' : 'Upload your documents')+'</strong>';
+    dropArea += '<p style="font-size:12px;color:#7C7E7D;margin-top:4px">Click to browse &mdash; PDF, Word, or text files</p>';
+    dropArea += '<input type="file" id="docInput" accept=".pdf,.doc,.docx,.txt" multiple style="display:none" onchange="handleDocUpload(this)">';
+    dropArea += '</div>';
+  } else {
+    dropArea = '<div class="doc-drop doc-drop-done">';
+    dropArea += '<div style="font-size:32px;margin-bottom:6px">&#8679;</div>';
+    dropArea += '<strong>All documents uploaded!</strong>';
+    dropArea += '<p style="font-size:12px;color:#7C7E7D;margin-top:4px">'+uploaded+' of 3 documents uploaded</p>';
+    dropArea += '</div>';
+  }
+
+  var h = '<div class="qcard">';
+  h += '<div style="text-align:center;margin-bottom:20px">';
+  h += '<h2 style="font-family:SFOrsonCasual,sans-serif;font-size:22px;color:#2D4C68;text-transform:uppercase;letter-spacing:.04em">Upload Your Documents</h2>';
+  h += '<p style="font-size:14px;color:#7C7E7D;margin-top:8px">Share 3 documents that reflect your writing style &mdash; reports, proposals, analyses, prose, etc.</p>';
+  h += '</div>';
+  h += dropArea;
+  if (docList) h += '<div class="doc-list">'+docList+'</div>';
+  h += '<div style="font-size:12px;color:#9AAAB8;text-align:center;margin-top:14px;line-height:1.6">All documents and information provided remain entirely yours. They will be processed privately and never stored.</div>';
+  h += '<div class="qbtns" style="margin-top:20px">';
+  h += '<button class="qbtn2" onclick="QP=\'intro\';renderQuiz()">&#8592; Back</button>';
+  h += '<button class="qbtn" '+(allDone?'':'disabled')+' onclick="QP=\'quiz\';QC=0;renderQuiz()">Continue &#8594;</button>';
+  h += '</div></div>';
+  return h;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function handleDocUpload(input) {
+  var files = input.files;
+  for (var i = 0; i < files.length; i++) {
+    if (DOCS.length < 3) DOCS.push(files[i].name);
+  }
+  renderQuiz();
+}
+
+function removeDoc(idx) {
+  DOCS.splice(idx, 1);
+  renderQuiz();
+}
+
+// ── Quiz questions ────────────────────────────────────────────────────────
 function tmplQ() {
   var q=QS[QC], a=QA[q.id], pct=Math.round(QC/QS.length*100);
   var last=(QC===QS.length-1), hasA=(a!==undefined);
@@ -65,11 +132,13 @@ function tmplQ() {
   if (q.t==='r') {
     for (var i=0; i<q.os.length; i++) {
       var v=String.fromCharCode(65+i), sel=(a===v)?' on':'';
-      inp += '<div class="qo'+sel+'" onclick="qsa('+q.id+',\''+v+'\')"><div class="qrd"><div class="qdot"></div></div>'+q.os[i]+'</div>';
+      inp += '<div class="qo'+sel+'" onclick="qsa('+q.id+',\''+v+'\')">';
+      inp += '<div class="qrd"><div class="qdot"></div></div>'+q.os[i]+'</div>';
     }
   } else if (q.t==='s') {
     var v2=a||5;
-    inp = '<div style="padding:6px 0 2px"><input type="range" min="1" max="10" value="'+v2+'" step="1" oninput="qsa('+q.id+',+this.value);document.getElementById(\'sv'+q.id+'\').textContent=this.value+\'/10\'">';
+    inp = '<div style="padding:6px 0 2px"><input type="range" min="1" max="10" value="'+v2+'" step="1"';
+    inp += ' oninput="qsa('+q.id+',+this.value);document.getElementById(\'sv'+q.id+'\').textContent=this.value+\'/10\'">';
     inp += '<div class="qsv"><span class="qsl">'+q.lo+'</span><span class="qsval" id="sv'+q.id+'">'+v2+'/10</span><span class="qsl">'+q.hi+'</span></div></div>';
   } else {
     var v3=a||0;
@@ -81,11 +150,13 @@ function tmplQ() {
   h += '<div class="qpr"><div class="qpf" style="width:'+pct+'%"></div></div>';
   h += '<div class="qmeta"><span class="qlbl">Question '+(QC+1)+' of '+QS.length+'</span><span class="qlbl">'+pct+'% complete</span></div>';
   h += '<div class="qq">'+q.q+'</div>'+inp;
-  h += '<div class="qbtns">'+(QC>0?'<button class="qbtn2" onclick="qprev()">&#8592; Back</button>':'');
+  h += '<div class="qbtns">';
+  h += (QC>0?'<button class="qbtn2" onclick="qprev()">&#8592; Back</button>':'<button class="qbtn2" onclick="QP=\'docs\';renderQuiz()">&#8592; Back</button>');
   h += '<button class="qbtn"'+(hasA?'':' disabled')+' onclick="qnext()">'+(last?'Get My Report &#8594;':'Next &#8594;')+'</button></div></div>';
   return h;
 }
 
+// ── Loading ───────────────────────────────────────────────────────────────
 function tmplLoad() {
   var h='<div class="qcard" style="text-align:center;padding:38px 28px">';
   h += '<img src="'+M+'" height="58" style="display:inline-block;margin-bottom:12px" alt="">';
@@ -96,7 +167,23 @@ function tmplLoad() {
   return h;
 }
 
+// ── Report — free snapshot + blurred paywall ──────────────────────────────
 function tmplReport() {
+  // Fix 2: handle API errors gracefully
+  if (!QR || QR.indexOf('API error') === 0 || QR.indexOf('error') === 0) {
+    var errMsg = QR || 'No response received.';
+    var h = '<div class="qcard">';
+    h += '<div style="text-align:center;padding:20px 0">';
+    h += '<div style="font-size:32px;margin-bottom:12px">&#128561;</div>';
+    h += '<div style="font-family:GilroyBold,sans-serif;font-size:17px;color:#D12019;margin-bottom:8px">Could not generate report</div>';
+    h += '<div style="font-size:13px;color:#7C7E7D;line-height:1.6;margin-bottom:6px">'+escHtml(errMsg)+'</div>';
+    h += '<div style="font-size:12px;color:#9AAAB8">Make sure the ANTHROPIC_API_KEY is set in your Vercel environment variables, then redeploy.</div>';
+    h += '</div>';
+    h += '<div class="qbtns" style="margin-top:20px"><button class="qbtn" onclick="retakeQuiz()">Try Again</button></div>';
+    h += '</div>';
+    return h;
+  }
+
   // Parse type line
   var typeMatch = QR.match(/\*\*Your Personality Type\*\*\s*\n([^\n]+)/);
   var typeStr = typeMatch ? typeMatch[1].trim() : '';
@@ -105,18 +192,26 @@ function tmplReport() {
   var typeDesc  = typeParts.slice(1).join(' \u2014 ');
 
   // Extract free reading section
-  var readingMatch = QR.match(/\*\*The Prof\.['']?s Reading\*\*\s*\n([\s\S]*?)(?=\*\*Your Superpowers|\*\*Watch Out|$)/);
-  var freeText = readingMatch ? readingMatch[1].trim() : QR.substring(0,500);
-  var freeHtml = freeText.split('\n').map(function(l){ return l.trim()? '<p>'+l+'</p>':''; }).join('');
+  var readingMatch = QR.match(/\*\*The Prof\.[\u2019']?s Reading\*\*\s*\n([\s\S]*?)(?=\*\*Your Superpowers|\*\*Watch Out|$)/);
+  var freeText = readingMatch ? readingMatch[1].trim() : QR.substring(0, 600);
+  var freeHtml = freeText.split('\n').map(function(l){ return l.trim()?'<p>'+l+'</p>':''; }).join('');
 
-  // Paywall preview (generic placeholder, will be blurred)
-  var paywallPreview = '<p><strong>Your Superpowers</strong></p><p>&#8226; Deep analytical thinking and strategic vision</p><p>&#8226; Ability to see patterns others miss</p><p>&#8226; Composed and clear-headed under pressure</p><p><strong>Watch Out For</strong></p><p>&#8226; Tendency to overthink before acting</p><p>&#8226; Can appear detached in emotional situations</p><p><strong>Prof. Filer\'s Verdict</strong></p><p>A rare combination of depth and drive that the world needs more of.</p>';
+  // Placeholder paywall content (blurred)
+  var paywallPreview = '<p><strong>Your Superpowers</strong></p>'
+    +'<p>&#8226; Deep analytical thinking and strategic vision</p>'
+    +'<p>&#8226; Ability to see patterns others miss</p>'
+    +'<p>&#8226; Composed and clear-headed under pressure</p>'
+    +'<p><strong>Watch Out For</strong></p>'
+    +'<p>&#8226; Tendency to overthink before acting</p>'
+    +'<p>&#8226; Can appear detached in emotional situations</p>'
+    +'<p><strong>Prof. Filer\'s Verdict</strong></p>'
+    +'<p>A rare combination of depth and drive that the world needs more of.</p>';
 
   var h='<div class="qcard">';
-  // Header
+  // Fix 1: header in uppercase SFOrsonCasual
   h += '<div class="qrh"><img src="'+M+'" height="48" alt="Prof. Filer">';
   h += '<div><div style="font-size:10px;color:#7C7E7D;letter-spacing:.1em;text-transform:uppercase">Your AI Analysis Complete</div>';
-  h += '<div style="font-family:SFOrsonCasual,sans-serif;font-size:22px;color:#2D4C68">'+typeTitle+'</div>';
+  h += '<div style="font-family:SFOrsonCasual,sans-serif;font-size:24px;color:#2D4C68;text-transform:uppercase;letter-spacing:.04em">'+typeTitle+'</div>';
   if (typeDesc) h += '<div style="font-size:13px;color:#7C7E7D">'+typeDesc+'</div>';
   h += '</div></div>';
   // Free snapshot
@@ -125,7 +220,7 @@ function tmplReport() {
   h += '<div class="rpt-pay"><div class="rpt-pay-blur qrb">'+paywallPreview+'</div>';
   h += '<div class="rpt-pay-overlay"><h3>Unlock Your Full Report</h3>';
   h += '<p>Natural strengths, blind spots, growth zones &amp; Prof. Filer\'s verdict</p>';
-  h += '<button class="qbtn" style="width:auto;padding:11px 28px;background:#D12019" onclick="alert(\'Full report purchase coming soon. Visit prof-filer.com to access your account.\')">Download Full Report &#8594;</button>';
+  h += '<button class="qbtn" style="width:auto;padding:11px 28px;background:#D12019" onclick="alert(\'Full report purchase coming soon.\')">Download Full Report &#8594;</button>';
   h += '</div></div>';
   h += '<div class="qdisc">Prof. Filer is an independent AI-based personality assessment tool and is not affiliated with or endorsed by the Myers-Briggs Type Indicator&#174; or The Myers-Briggs Company. For informational purposes only.</div>';
   h += '<div class="qbtns" style="margin-top:18px"><button class="qbtn2" onclick="retakeQuiz()">Retake Assessment</button><button class="qbtn2" onclick="copyReport()">Copy Report</button></div>';
@@ -133,7 +228,7 @@ function tmplReport() {
   return h;
 }
 
-function retakeQuiz() { QP='intro'; QC=0; QA={}; QR=''; renderQuiz(); }
+function retakeQuiz() { QP='intro'; QC=0; QA={}; QR=''; DOCS=[]; renderQuiz(); }
 function copyReport() { if (navigator.clipboard) navigator.clipboard.writeText(QR).then(function(){ alert('Copied!'); }); }
 function qsa(id,v) { QA[id]=v; renderQuiz(); }
 function qprev() { if (QC>0) { QC--; renderQuiz(); } }
@@ -154,28 +249,29 @@ function submitQuiz() {
     else { at=a+'/5 stars'; }
     lines.push('Q'+q.id+': '+q.q+'\nAnswer: '+at);
   }
+  var docNote = DOCS.length > 0 ? '\n\nDocuments uploaded: '+DOCS.join(', ') : '';
   var prompt = [
     'You are Prof. Filer, a warm, witty, and incisive personality analyst.',
     'Based on these quiz answers, write a personality assessment report.',
     '',
-    lines.join('\n\n'),
+    lines.join('\n\n') + docNote,
     '',
     'Structure your report using these exact headings:',
     '',
     '**Your Personality Type**',
-    '[4-letter MBTI type] — [Profile name e.g. The Thinker] — [3-word descriptor]',
+    '[4-letter MBTI type] \u2014 [Profile name e.g. The Thinker] \u2014 [3-word descriptor]',
     '',
     "**The Prof.'s Reading**",
     '[2-3 paragraphs of warm, intelligent, specific insight. This is the free section shown to the user.]',
     '',
     '**Your Superpowers**',
-    '- [Genuine strength 1]',
-    '- [Genuine strength 2]',
-    '- [Genuine strength 3]',
+    '\u2022 [Genuine strength 1]',
+    '\u2022 [Genuine strength 2]',
+    '\u2022 [Genuine strength 3]',
     '',
     '**Watch Out For**',
-    '- [Blind spot 1, warmly delivered]',
-    '- [Blind spot 2, warmly delivered]',
+    '\u2022 [Blind spot 1, warmly delivered]',
+    '\u2022 [Blind spot 2, warmly delivered]',
     '',
     "**Prof. Filer's Verdict**",
     '[One memorable closing sentence.]',
@@ -190,9 +286,16 @@ function submitQuiz() {
   })
   .then(function(res){ return res.json(); })
   .then(function(d){
-    if (d.error) { QR = 'API error: ' + JSON.stringify(d.error); }
-    else { var blk=d.content&&d.content.find(function(b){return b.type==='text';}); QR=blk?blk.text:'Unable to generate report.'; }
+    if (d.error) {
+      QR = 'API error: ' + (typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
+    } else {
+      var blk = d.content && d.content.find(function(b){ return b.type==='text'; });
+      QR = blk ? blk.text : 'Unable to generate report.';
+    }
     QP='report'; renderQuiz();
   })
-  .catch(function(){ QR='Connection error. Please try again.'; QP='report'; renderQuiz(); });
+  .catch(function(e){
+    QR = 'Connection error: ' + e.toString();
+    QP='report'; renderQuiz();
+  });
 }
